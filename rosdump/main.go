@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"log"
 	"os"
+
+	"git.ecadlabs.com/ecad/rostools/rosdump/config"
 )
 
 func main() {
@@ -21,7 +23,7 @@ func main() {
 		os.Exit(0)
 	}
 
-	cfg, err := LoadConfig(configFile)
+	cfg, err := config.LoadConfig(configFile)
 	if err != nil {
 		log.Fatal(err)
 	}

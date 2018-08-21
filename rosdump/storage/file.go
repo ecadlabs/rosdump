@@ -9,22 +9,33 @@ import (
 	"path"
 	"strings"
 	"text/template"
+	"time"
 
-	"github.com/e-asphyx/rosdump/config"
+	"git.ecadlabs.com/ecad/rostools/rosdump/config"
+	"github.com/sirupsen/logrus"
 )
 
 type FileStorage struct {
 	pathTpl  *template.Template
 	compress bool
+	logger   *logrus.Logger
+}
+
+type fileStorageTx struct {
+	f         *FileStorage
+	timestamp time.Time
 }
 
 func (f *FileStorage) Begin(ctx context.Context) (Tx, error) {
-	return f, nil
+	return &fileStorageTx{
+		f:         f,
+		timestamp: time.Now(),
+	}, nil
 }
 
-func (f *FileStorage) Add(ctx context.Context, metadata map[string]interface{}, stream io.Reader) (err error) {
+func (f *fileStorageTx) Add(ctx context.Context, metadata map[string]interface{}, stream io.Reader) (err error) {
 	var outPath strings.Builder
-	if err = f.pathTpl.Execute(&outPath, metadata); err != nil {
+	if err = f.f.pathTpl.Execute(&outPath, metadata); err != nil {
 		return err
 	}
 
@@ -32,6 +43,11 @@ func (f *FileStorage) Add(ctx context.Context, metadata map[string]interface{}, 
 	if err = os.MkdirAll(dir, 0777); err != nil {
 		return err
 	}
+
+	f.f.logger.WithFields(logrus.Fields{
+		"file":       outPath.String(),
+		"compressed": f.f.compress,
+	}).Infoln("writing...")
 
 	fd, err := os.Create(outPath.String())
 	if err != nil {
@@ -47,7 +63,7 @@ func (f *FileStorage) Add(ctx context.Context, metadata map[string]interface{}, 
 
 	var outFd io.Writer
 
-	if f.compress {
+	if f.f.compress {
 		zfd := gzip.NewWriter(fd)
 		defer func() {
 			e := zfd.Close()
@@ -65,9 +81,11 @@ func (f *FileStorage) Add(ctx context.Context, metadata map[string]interface{}, 
 	return err
 }
 
-func (f *FileStorage) Commit(ctx context.Context) error { return nil }
+func (f *fileStorageTx) Timestamp() time.Time { return f.timestamp }
 
-func NewFileStorage(pathTpl string, compress bool) (*FileStorage, error) {
+func (f *fileStorageTx) Commit(ctx context.Context) error { return nil }
+
+func NewFileStorage(pathTpl string, compress bool, logger *logrus.Logger) (*FileStorage, error) {
 	tpl, err := template.New("path").Parse(pathTpl)
 	if err != nil {
 		return nil, err
@@ -76,10 +94,11 @@ func NewFileStorage(pathTpl string, compress bool) (*FileStorage, error) {
 	return &FileStorage{
 		pathTpl:  tpl,
 		compress: compress,
+		logger:   logger,
 	}, nil
 }
 
-func newFileStorage(options config.Options) (Storage, error) {
+func newFileStorage(options config.Options, logger *logrus.Logger) (Storage, error) {
 	path, err := options.GetString("path")
 	if err != nil {
 		return nil, errors.New("file: path is not specified")
@@ -87,7 +106,7 @@ func newFileStorage(options config.Options) (Storage, error) {
 
 	compress, _ := options.GetBool("compress")
 
-	return NewFileStorage(path, compress)
+	return NewFileStorage(path, compress, logger)
 }
 
 func init() {

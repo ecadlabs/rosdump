@@ -13,8 +13,8 @@ import (
 const configVersion = "1"
 
 type Devices struct {
-	List    []map[string]interface{} `yaml:"list"`
-	Options Options                  `yaml:"options"`
+	List   []map[string]interface{} `yaml:"list"`
+	Common Options                  `yaml:"options"`
 }
 
 type Storage struct {

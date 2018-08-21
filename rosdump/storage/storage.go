@@ -4,12 +4,15 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"time"
 
-	"github.com/e-asphyx/rosdump/config"
+	"git.ecadlabs.com/ecad/rostools/rosdump/config"
+	"github.com/sirupsen/logrus"
 )
 
 type Tx interface {
 	Add(ctx context.Context, metadata map[string]interface{}, stream io.Reader) error
+	Timestamp() time.Time
 	Commit(ctx context.Context) error
 }
 
@@ -17,7 +20,7 @@ type Storage interface {
 	Begin(ctx context.Context) (Tx, error)
 }
 
-type NewStorageFunc func(config.Options) (Storage, error)
+type NewStorageFunc func(config.Options, *logrus.Logger) (Storage, error)
 
 var registry = make(map[string]NewStorageFunc)
 
@@ -25,9 +28,9 @@ func registerStorage(name string, fn NewStorageFunc) {
 	registry[name] = fn
 }
 
-func NewStorage(name string, options config.Options) (Storage, error) {
+func NewStorage(name string, options config.Options, logger *logrus.Logger) (Storage, error) {
 	if fn, ok := registry[name]; ok {
-		return fn(options)
+		return fn(options, logger)
 	}
 
 	return nil, fmt.Errorf("Unknown storage driver: `%s'", name)

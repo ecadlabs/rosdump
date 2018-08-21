@@ -2,6 +2,7 @@ package sshutils
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"time"
 
@@ -39,7 +40,7 @@ func Dial(ctx context.Context, address string, c *Config) (client *Client, err e
 	if c.KeyFunc != nil {
 		key, err := c.KeyFunc()
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("key func: %v", err)
 		}
 
 		signer, err := ssh.ParsePrivateKey(key)

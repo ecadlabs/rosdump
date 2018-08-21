@@ -4,24 +4,30 @@ import (
 	"bufio"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"net"
 	"sync"
 	"time"
 
-	"github.com/e-asphyx/rosdump/config"
-	"github.com/e-asphyx/rosdump/sshutils"
+	"git.ecadlabs.com/ecad/rostools/rosdump/config"
+	"git.ecadlabs.com/ecad/rostools/rosdump/sshutils"
+	"github.com/sirupsen/logrus"
 	"golang.org/x/crypto/ssh"
 )
 
 type SSHCommand struct {
-	KeyFunc  sshutils.KeyFunc
-	Host     string
-	Port     string
-	Username string
-	Password string
-	Command  string
+	KeyFunc        sshutils.KeyFunc
+	Name           string
+	Host           string
+	Port           string
+	Username       string
+	Password       string
+	Command        string
+	Logger         *logrus.Logger
+	ExportMetadata Metadata
+	DeviceMetadata Metadata
 }
 
 type sshCommandResponse struct {
@@ -90,7 +96,7 @@ func (s *sshCommandResponse) Close() (err error) {
 	return nil
 }
 
-func (s *SSHCommand) Export(ctx context.Context) (response io.ReadCloser, err error) {
+func (s *SSHCommand) Export(ctx context.Context) (response io.ReadCloser, metadata Metadata, err error) {
 	sshConfig := sshutils.Config{
 		KeyFunc:  s.KeyFunc,
 		Username: s.Username,
@@ -104,9 +110,16 @@ func (s *SSHCommand) Export(ctx context.Context) (response io.ReadCloser, err er
 
 	address := net.JoinHostPort(s.Host, port)
 
+	l := s.Logger.WithFields(logrus.Fields{
+		"name":    s.Name,
+		"address": address,
+	})
+
+	l.Info("establishing SSH connection...")
+
 	client, err := sshutils.Dial(ctx, address, &sshConfig)
 	if err != nil {
-		return nil, err
+		return nil, nil, fmt.Errorf("ssh-command: %v", err)
 	}
 
 	defer func() {
@@ -141,16 +154,18 @@ func (s *SSHCommand) Export(ctx context.Context) (response io.ReadCloser, err er
 
 	session, err := client.NewSession()
 	if err != nil {
-		return nil, err
+		return nil, nil, fmt.Errorf("ssh-command: new session: %v", err)
 	}
 
 	stdout, err := session.StdoutPipe()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
+	l.Infof("issuing `%s' command...", s.Command)
+
 	if err = session.Start(s.Command); err != nil {
-		return nil, err
+		return nil, nil, fmt.Errorf("ssh-command: session start: %v", err)
 	}
 
 	rn := readNotifier{
@@ -165,19 +180,38 @@ func (s *SSHCommand) Export(ctx context.Context) (response io.ReadCloser, err er
 		session: session,
 	}
 
-	return &res, nil
+	return &res, s.ExportMetadata, nil
+}
+
+func (s *SSHCommand) Metadata() Metadata {
+	return s.DeviceMetadata
 }
 
 var idFileCache sync.Map
 
-func newSSHCommand(options config.Options) (Exporter, error) {
-	var cmd SSHCommand
+func newSSHCommand(options config.Options, logger *logrus.Logger) (Exporter, error) {
+	cmd := SSHCommand{
+		Logger: logger,
+	}
 
-	cmd.Host, _ = options.GetString("address")
+	cmd.Name, _ = options.GetString("name")
+	cmd.Host, _ = options.GetString("host")
 	cmd.Port, _ = options.GetString("port")
 	cmd.Username, _ = options.GetString("username")
 	cmd.Password, _ = options.GetString("password")
 	cmd.Command, _ = options.GetString("command")
+
+	if cmd.Host == "" {
+		return nil, errors.New("ssh-command: address missing")
+	}
+
+	if cmd.Username == "" {
+		return nil, errors.New("ssh-command: user name missing")
+	}
+
+	if cmd.Command == "" {
+		return nil, errors.New("ssh-command: command missing")
+	}
 
 	if keyFile, err := options.GetString("identity_file"); err != nil && keyFile != "" {
 		var keyData []byte
@@ -187,7 +221,7 @@ func newSSHCommand(options config.Options) (Exporter, error) {
 		} else {
 			keyData, err = ioutil.ReadFile(keyFile)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("ssh-command: read id: %v", err)
 			}
 
 			if val, ok := idFileCache.LoadOrStore(keyFile, keyData); ok {
@@ -200,16 +234,19 @@ func newSSHCommand(options config.Options) (Exporter, error) {
 		}
 	}
 
-	if cmd.Host == "" {
-		return nil, errors.New("ssh-command: address missing")
+	// Filter out password
+	metadata := make(Metadata, len(options))
+	for k, v := range options {
+		if k != "password" {
+			metadata[k] = v
+		}
 	}
 
-	if cmd.Username == "" {
-		return nil, errors.New("ssh-command: username missing")
-	}
-
-	if cmd.Command == "" {
-		return nil, errors.New("ssh-command: command missing")
+	cmd.ExportMetadata = metadata
+	cmd.DeviceMetadata = Metadata{
+		"name":   cmd.Name,
+		"host":   cmd.Host,
+		"device": "ssh-command",
 	}
 
 	return &cmd, nil
