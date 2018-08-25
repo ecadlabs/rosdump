@@ -2,7 +2,6 @@ package scraper
 
 import (
 	"context"
-	"fmt"
 	"sync"
 	"time"
 
@@ -41,16 +40,12 @@ func (s *Scraper) export(ctx context.Context, d devices.Exporter, tx storage.Tx,
 
 	data, metadata, err := d.Export(exportCtx)
 	if err != nil {
-		fmt.Printf("export: export: %v\n", err)
 		return err
 	}
 
 	defer func() {
 		e := data.Close()
-		if e != nil {
-			fmt.Printf("export: close: %v\n", e)
-		}
-		if err != nil {
+		if err == nil {
 			err = e
 		}
 	}()
@@ -60,7 +55,6 @@ func (s *Scraper) export(ctx context.Context, d devices.Exporter, tx storage.Tx,
 	metadata["time"] = tx.Timestamp()
 
 	if err := tx.Add(s.storageCtx(ctx), metadata, data); err != nil {
-		fmt.Printf("export: add: %v\n", err)
 		return err
 	}
 
@@ -77,12 +71,10 @@ func (s *Scraper) exportLoop(ctx context.Context, ch <-chan devices.Exporter, tx
 
 		select {
 		case <-ctx.Done(): // Parent context canceled
-			fmt.Printf("loop: parent context done\n")
 			return
 		default:
 		}
 	}
-	fmt.Printf("loop: done\n")
 }
 
 func (s *Scraper) Do(ctx context.Context) error {
@@ -100,8 +92,6 @@ func (s *Scraper) Do(ctx context.Context) error {
 
 	var wg sync.WaitGroup
 	wg.Add(gnum)
-
-	fmt.Printf("Do: starting %d goroutines\n", gnum)
 
 	for i := 0; i < gnum; i++ {
 		go func() {
@@ -124,7 +114,6 @@ jobLoop:
 
 	select {
 	case <-ctx.Done():
-		fmt.Printf("Do: context done\n")
 		return ctx.Err()
 	default:
 	}
