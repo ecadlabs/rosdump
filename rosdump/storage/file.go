@@ -98,7 +98,7 @@ func NewFileStorage(pathTpl string, compress bool, logger *logrus.Logger) (*File
 	}, nil
 }
 
-func newFileStorage(options config.Options, logger *logrus.Logger) (Storage, error) {
+func newFileStorage(ctx context.Context, options config.Options, logger *logrus.Logger) (Storage, error) {
 	path, err := options.GetString("path")
 	if err != nil {
 		return nil, errors.New("file: path is not specified")

@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net"
 	"sync"
 	"time"
@@ -187,8 +186,6 @@ func (s *SSHCommand) Metadata() Metadata {
 	return s.DeviceMetadata
 }
 
-var idFileCache sync.Map
-
 func newSSHCommand(options config.Options, logger *logrus.Logger) (Exporter, error) {
 	cmd := SSHCommand{
 		Logger: logger,
@@ -213,20 +210,10 @@ func newSSHCommand(options config.Options, logger *logrus.Logger) (Exporter, err
 		return nil, errors.New("ssh-command: command missing")
 	}
 
-	if keyFile, err := options.GetString("identity_file"); err != nil && keyFile != "" {
-		var keyData []byte
-
-		if val, ok := idFileCache.Load(keyFile); ok {
-			keyData = val.([]byte)
-		} else {
-			keyData, err = ioutil.ReadFile(keyFile)
-			if err != nil {
-				return nil, fmt.Errorf("ssh-command: read id: %v", err)
-			}
-
-			if val, ok := idFileCache.LoadOrStore(keyFile, keyData); ok {
-				keyData = val.([]byte)
-			}
+	if keyFile, err := options.GetString("identityFile"); err == nil && keyFile != "" {
+		keyData, err := sshutils.ReadIdentityFile(keyFile)
+		if err != nil {
+			return nil, fmt.Errorf("ssh-command: %v", err)
 		}
 
 		cmd.KeyFunc = func() ([]byte, error) {

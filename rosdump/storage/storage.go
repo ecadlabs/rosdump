@@ -20,7 +20,7 @@ type Storage interface {
 	Begin(ctx context.Context) (Tx, error)
 }
 
-type NewStorageFunc func(config.Options, *logrus.Logger) (Storage, error)
+type NewStorageFunc func(context.Context, config.Options, *logrus.Logger) (Storage, error)
 
 var registry = make(map[string]NewStorageFunc)
 
@@ -28,9 +28,9 @@ func registerStorage(name string, fn NewStorageFunc) {
 	registry[name] = fn
 }
 
-func NewStorage(name string, options config.Options, logger *logrus.Logger) (Storage, error) {
+func NewStorage(ctx context.Context, name string, options config.Options, logger *logrus.Logger) (Storage, error) {
 	if fn, ok := registry[name]; ok {
-		return fn(options, logger)
+		return fn(ctx, options, logger)
 	}
 
 	return nil, fmt.Errorf("Unknown storage driver: `%s'", name)
