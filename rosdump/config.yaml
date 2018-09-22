@@ -1,0 +1,22 @@
+version: 1
+
+devices:
+  list:
+    - options:
+        host: 192.168.88.1
+  common:
+    driver: ssh-command
+    timeout: 30s
+    options:
+      command: export
+      username: name
+      password: password
+
+storage:
+  driver: file
+  timeout: 30s
+  options:
+    path: 'storage/{{.host}}/{{.time.Format "2006-01-02T15:04:05Z07:00"}}'
+
+timeout: 30s
+interval: 4h

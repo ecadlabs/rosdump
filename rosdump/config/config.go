@@ -12,20 +12,30 @@ import (
 
 const configVersion = "1"
 
+type Device struct {
+	Driver  string  `yaml:"driver"`
+	Timeout string  `yaml:"timeout"`
+	Options Options `yaml:"options"`
+}
+
 type Devices struct {
-	List   []map[string]interface{} `yaml:"list"`
-	Common Options                  `yaml:"options"`
+	List   []*Device `yaml:"list"`
+	Common *Device   `yaml:"common"`
 }
 
 type Storage struct {
 	Driver  string  `yaml:"driver"`
+	Timeout string  `yaml:"timeout"`
 	Options Options `yaml:"options"`
 }
 
 type Config struct {
-	Version string  `yaml:"version"`
-	Devices Devices `yaml:"devices"`
-	Storage Storage `yaml:"storage"`
+	Version       string  `yaml:"version"`
+	Timeout       string  `yaml:"timeout"`
+	MaxGoroutines int     `yaml:"max_goroutines"`
+	Interval      string  `yaml:"interval"`
+	Devices       Devices `yaml:"devices"`
+	Storage       Storage `yaml:"storage"`
 }
 
 type Options map[string]interface{}
@@ -92,7 +102,7 @@ func (o Options) GetBool(name string) (bool, error) {
 	}
 }
 
-func LoadConfig(name string) (*Config, error) {
+func Load(name string) (*Config, error) {
 	buf, err := ioutil.ReadFile(name)
 	if err != nil {
 		return nil, err

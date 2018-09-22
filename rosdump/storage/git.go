@@ -382,13 +382,13 @@ func (g *gitStorageTx) Commit(ctx context.Context) error {
 
 func newGitStorage(ctx context.Context, options config.Options, logger *logrus.Logger) (Storage, error) {
 	var conf GitStorageConfig
-	conf.RepositoryPath, _ = options.GetString("repositoryPath")
+	conf.RepositoryPath, _ = options.GetString("repository_path")
 	conf.URL, _ = options.GetString("url")
 	conf.Pull, _ = options.GetBool("pull")
 	conf.Username, _ = options.GetString("username")
 	conf.Password, _ = options.GetString("password")
 
-	if name, err := options.GetString("identityFile"); err == nil && name != "" {
+	if name, err := options.GetString("identity_file"); err == nil && name != "" {
 		pem, err := sshutils.ReadIdentityFile(name)
 		if err != nil {
 			return nil, fmt.Errorf("git: %v", err)
@@ -396,11 +396,11 @@ func newGitStorage(ctx context.Context, options config.Options, logger *logrus.L
 		conf.PemBytes = pem
 	}
 
-	conf.RemoteName, _ = options.GetString("remoteName")
-	conf.ReferenceName, _ = options.GetString("referenceName")
+	conf.RemoteName, _ = options.GetString("remote_name")
+	conf.ReferenceName, _ = options.GetString("reference_name")
 	conf.Push, _ = options.GetBool("push")
 
-	if v, ok := options["refSpecs"]; ok {
+	if v, ok := options["ref_specs"]; ok {
 		switch vv := v.(type) {
 		case []interface{}:
 			for _, iv := range vv {
@@ -416,10 +416,10 @@ func newGitStorage(ctx context.Context, options config.Options, logger *logrus.L
 		fmt.Println(conf.RefSpecs)
 	}
 
-	conf.DestinationPath, _ = options.GetString("destinationPath")
+	conf.DestinationPath, _ = options.GetString("destination_path")
 	conf.Name, _ = options.GetString("name")
 	conf.Email, _ = options.GetString("email")
-	conf.CommitMessage, _ = options.GetString("commitMessage")
+	conf.CommitMessage, _ = options.GetString("commit_message")
 
 	return NewGitStorage(ctx, &conf, logger)
 }
