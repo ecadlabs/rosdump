@@ -1,6 +1,13 @@
+# Rosdump (Beta)
 
+rosdump is a tool for backing up and tracking configuration of RouterOS devices
 
-# rosdump
+Use rosdump to:
+
+- Backup Mikrotik network device configuration to local files
+- Backup Mikrotik network device configuration and track changes over time
+    using git
+- Run as a daemon that backs up devices on a predefined schedule
 
 ## Config example
 
@@ -86,18 +93,18 @@ devices:
     options:
       command: export
       username: admin
-      identity_file: /Users/asphyx/.ssh/id_rsa
+      identity_file: /path/to/routeros_admin_private_key
 
 storage:
   driver: git
   timeout: 30s
   options:
-    url: git@github.com:e-asphyx/mikrotik.git
-    identity_file: /Users/asphyx/.ssh/id_rsa
+    url: git@github.com:yourorg/networkbackups.git
+    identity_file: /path/to/private_git_deploy_key
     destination_path: '{{.host}}'
     push: true
-    name: Eugene Zagidullin
-    email: e.asphyx@gmail.com
+    name: Network Backup
+    email: networkbackup@example.net
     commit_message: '{{.time.UTC.Format "2006-01-02T15:04:05Z07:00"}}'
 
 timeout: 30s
@@ -108,4 +115,4 @@ interval: 4h
 
 ## Template data fields (transaction metadata)
 
-Currently `ssh-command` driver exposes all its options (except password) as a transaction metadata. Additionally `time` field is set to transaction timestamp (see the descroption of Go `time.Time` type).
+Currently `ssh-command` driver exposes all its options (except password) as transaction metadata. Additionally `time` field is set to transaction timestamp (see the descroption of Go `time.Time` type).
