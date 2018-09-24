@@ -107,6 +107,11 @@ func (s *SSHCommand) Export(ctx context.Context) (response io.ReadCloser, metada
 		port = "22"
 	}
 
+	command := s.Command
+	if command == "" {
+		command = "export"
+	}
+
 	address := net.JoinHostPort(s.Host, port)
 
 	l := s.Logger.WithFields(logrus.Fields{
@@ -161,9 +166,9 @@ func (s *SSHCommand) Export(ctx context.Context) (response io.ReadCloser, metada
 		return nil, nil, err
 	}
 
-	l.Infof("issuing `%s' command...", s.Command)
+	l.Infof("issuing `%s' command...", command)
 
-	if err = session.Start(s.Command); err != nil {
+	if err = session.Start(command); err != nil {
 		return nil, nil, fmt.Errorf("ssh-command: session start: %v", err)
 	}
 
@@ -206,11 +211,13 @@ func newSSHCommand(options config.Options, logger *logrus.Logger) (Exporter, err
 		return nil, errors.New("ssh-command: user name missing")
 	}
 
-	if cmd.Command == "" {
-		return nil, errors.New("ssh-command: command missing")
-	}
+	/*
+		if cmd.Command == "" {
+			return nil, errors.New("ssh-command: command missing")
+		}
+	*/
 
-	if keyFile, err := options.GetString("identityFile"); err == nil && keyFile != "" {
+	if keyFile, err := options.GetString("identity_file"); err == nil && keyFile != "" {
 		keyData, err := sshutils.ReadIdentityFile(keyFile)
 		if err != nil {
 			return nil, fmt.Errorf("ssh-command: %v", err)
