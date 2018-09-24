@@ -8,8 +8,8 @@ import (
 	"syscall"
 	"time"
 
-	"git.ecadlabs.com/ecad/rostools/rosdump/config"
-	"git.ecadlabs.com/ecad/rostools/rosdump/scraper"
+	"github.com/ecadlabs/rosdump/config"
+	"github.com/ecadlabs/rosdump/scraper"
 	log "github.com/sirupsen/logrus"
 )
 

@@ -12,8 +12,8 @@ import (
 	"sync"
 	"time"
 
-	"git.ecadlabs.com/ecad/rostools/rosdump/config"
-	"git.ecadlabs.com/ecad/rostools/rosdump/sshutils"
+	"github.com/ecadlabs/rosdump/config"
+	"github.com/ecadlabs/rosdump/sshutils"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/crypto/ssh"
 	"gopkg.in/src-d/go-billy.v4/memfs"

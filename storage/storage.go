@@ -6,7 +6,7 @@ import (
 	"io"
 	"time"
 
-	"git.ecadlabs.com/ecad/rostools/rosdump/config"
+	"github.com/ecadlabs/rosdump/config"
 	"github.com/sirupsen/logrus"
 )
 

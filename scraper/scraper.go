@@ -6,9 +6,9 @@ import (
 	"sync"
 	"time"
 
-	"git.ecadlabs.com/ecad/rostools/rosdump/config"
-	"git.ecadlabs.com/ecad/rostools/rosdump/devices"
-	"git.ecadlabs.com/ecad/rostools/rosdump/storage"
+	"github.com/ecadlabs/rosdump/config"
+	"github.com/ecadlabs/rosdump/devices"
+	"github.com/ecadlabs/rosdump/storage"
 	"github.com/sirupsen/logrus"
 )
 
