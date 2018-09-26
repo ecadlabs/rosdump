@@ -3,17 +3,24 @@
 
 # Rosdump (Beta)
 
-rosdump is a tool for backing up and tracking configuration of RouterOS
-devices.
+rosdump is a tool for backing up and optionally tracking configuration of
+RouterOS devices.
 
 Use rosdump to:
 
-- Backup Mikrotik network device configurations to local files
-- Backup Mikrotik network device configurations and track changes over time
-    using git
+- Backup Mikrotik network device configurations to your local file system
+- Backup Mikrotik network device configurations to a git repository
 - Run as a daemon that backs up devices on a predefined schedule
 
-## Config example
+
+# Quick Start
+
+The following example uses the docker image to backup a RouterOS device. Create
+a config named `rosdump.yml` on your computer using the example below. 
+
+Specify the IP address, admin user and password of your own device.
+
+## Config example that writes backup to local filesystem
 
 ```yaml
 version: 1
@@ -31,11 +38,25 @@ devices:
 storage:
   driver: file
   timeout: 30s
-  path: 'storage/{{.host}}/{{.time.UTC.Format "2006-01-02T15:04:05Z07:00"}}'
+  path: '/opt/backups/{{.host}}/{{.time.UTC.Format "2006-01-02T15:04:05Z07:00"}}'
 
 timeout: 30s # Optional timeout for a whole work cycle
 interval: 4h # Duration between backups when running as a daemon
 ```
+
+Assuming your config file is named `rosdump.yaml`, and you have docker
+installed on your computer, run the following command:
+
+```
+docker run --rm \
+        -v $(realpath rosdump.yml):/etc/rosdump.yml \
+        -v $(realpath backups):/opt/backups ecadlabs/rosdump
+```
+
+You will now have a backup of your configuration in a directory named
+`backups/` in your present working directory.
+
+# Configuration Schema
 
 ## Exporter drivers
 
@@ -95,7 +116,7 @@ interval: 4h # Duration between backups when running as a daemon
 
 [^1]: https://golang.org/pkg/time/#ParseDuration
 
-#### Example
+#### Example config for git storage
 
 ```yaml
 version: 1
@@ -128,3 +149,4 @@ interval: 4h
 ## Template data fields (transaction metadata)
 
 Currently `ssh-command` driver exposes all its options (except password) as a transaction metadata. Additionally `time` field is set to transaction timestamp (see the description of Go `time.Time` type).
+
