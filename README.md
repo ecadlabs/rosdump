@@ -1,7 +1,8 @@
-=======
+Rosdump
+=========
+
 [![CircleCI](https://circleci.com/gh/ecadlabs/rosdump/tree/master.svg?style=svg)](https://circleci.com/gh/ecadlabs/rosdump/tree/master)
 
-# Rosdump (Beta)
 
 rosdump is a tool for backing up and optionally tracking configuration of
 RouterOS devices.
