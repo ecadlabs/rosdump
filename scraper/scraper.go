@@ -12,6 +12,10 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+const (
+	DefaultExporterDriver = "ssh-command"
+)
+
 type Exporter struct {
 	Device  devices.Exporter
 	Timeout time.Duration
@@ -131,34 +135,29 @@ jobLoop:
 
 func New(c *config.Config, logger *logrus.Logger) (*Scraper, error) {
 	// Init drivers
-	var (
-		devCommon  config.Options
-		devTimeout time.Duration
-		devDriver  string
-	)
+	var devCommon config.Options
 
 	if c.Devices.Common != nil {
-		devCommon = c.Devices.Common.Options
-		devTimeout, _ = time.ParseDuration(c.Devices.Common.Timeout)
-		devDriver = c.Devices.Common.Driver
+		devCommon = c.Devices.Common
 	}
 
 	exporters := make([]*Exporter, 0, len(c.Devices.List))
 
 	for _, dev := range c.Devices.List {
-		options := make(config.Options, len(dev.Options)+len(devCommon))
+		options := make(config.Options, len(dev)+len(devCommon))
+
 		for k, v := range devCommon {
 			options[k] = v
 		}
 
 		// Override with per-device options
-		for k, v := range dev.Options {
+		for k, v := range dev {
 			options[k] = v
 		}
 
-		driver := devDriver
-		if dev.Driver != "" {
-			driver = dev.Driver
+		driver, _ := options.GetString("driver")
+		if driver == "" {
+			driver = DefaultExporterDriver
 		}
 
 		logger.WithField("driver", driver).Info("initializing device...")
@@ -168,9 +167,9 @@ func New(c *config.Config, logger *logrus.Logger) (*Scraper, error) {
 			return nil, err
 		}
 
-		timeout := devTimeout
-		if t, _ := time.ParseDuration(dev.Timeout); t != 0 {
-			timeout = t
+		var timeout time.Duration
+		if t, _ := options.GetString("timeout"); t != "" {
+			timeout, _ = time.ParseDuration(t)
 		}
 
 		e := Exporter{
@@ -187,16 +186,24 @@ func New(c *config.Config, logger *logrus.Logger) (*Scraper, error) {
 
 	logger.Infof("%d devices found", len(exporters))
 
-	storageTimeout, _ := time.ParseDuration(c.Storage.Timeout)
-
-	ctx := context.Background()
-	if storageTimeout != 0 {
-		ctx, _ = context.WithTimeout(ctx, storageTimeout)
+	var timeout time.Duration
+	if t, _ := c.Storage.GetString("timeout"); t != "" {
+		timeout, _ = time.ParseDuration(t)
 	}
 
-	logger.WithField("driver", c.Storage.Driver).Infoln("initializing storage...")
+	ctx := context.Background()
+	if timeout != 0 {
+		ctx, _ = context.WithTimeout(ctx, timeout)
+	}
 
-	s, err := storage.NewStorage(ctx, c.Storage.Driver, c.Storage.Options, logger)
+	driver, _ := c.Storage.GetString("driver")
+	if driver == "" {
+		return nil, errors.New("Storage driver is not specified")
+	}
+
+	logger.WithField("driver", driver).Infoln("initializing storage...")
+
+	s, err := storage.NewStorage(ctx, driver, c.Storage, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -205,7 +212,7 @@ func New(c *config.Config, logger *logrus.Logger) (*Scraper, error) {
 		MaxGoroutines:  c.MaxGoroutines,
 		Devices:        exporters,
 		Storage:        s,
-		StorageTimeout: storageTimeout,
+		StorageTimeout: timeout,
 		Logger:         logger,
 	}, nil
 }

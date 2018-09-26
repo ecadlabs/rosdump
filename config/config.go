@@ -12,21 +12,9 @@ import (
 
 const configVersion = "1"
 
-type Device struct {
-	Driver  string  `yaml:"driver"`
-	Timeout string  `yaml:"timeout"`
-	Options Options `yaml:"options"`
-}
-
 type Devices struct {
-	List   []*Device `yaml:"list"`
-	Common *Device   `yaml:"common"`
-}
-
-type Storage struct {
-	Driver  string  `yaml:"driver"`
-	Timeout string  `yaml:"timeout"`
-	Options Options `yaml:"options"`
+	List   []Options `yaml:"list"`
+	Common Options   `yaml:"common"`
 }
 
 type Config struct {
@@ -35,7 +23,7 @@ type Config struct {
 	MaxGoroutines int     `yaml:"max_goroutines"`
 	Interval      string  `yaml:"interval"`
 	Devices       Devices `yaml:"devices"`
-	Storage       Storage `yaml:"storage"`
+	Storage       Options `yaml:"storage"`
 }
 
 type Options map[string]interface{}

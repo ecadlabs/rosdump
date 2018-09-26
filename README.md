@@ -1,13 +1,4 @@
-# Rosdump (Beta)
-
-rosdump is a tool for backing up and tracking configuration of RouterOS devices
-
-Use rosdump to:
-
-- Backup Mikrotik network device configuration to local files
-- Backup Mikrotik network device configuration and track changes over time
-    using git
-- Run as a daemon that backs up devices on a predefined schedule
+# rosdump
 
 ## Config example
 
@@ -16,27 +7,31 @@ version: 1
 
 devices:
   list:
-    - options: # Driver-dependent
-        host: 192.168.88.1
+    - host: 192.168.88.1
   common: # Overrides per-device settings
     driver: ssh-command
     timeout: 30s # See https://golang.org/pkg/time/#ParseDuration
-    options: # Driver-dependent
-      command: export
-      username: admin
-      password: password
+    command: export
+    username: admin
+    password: password
 
 storage:
   driver: file
   timeout: 30s
-  options: # Driver-dependent
-    path: 'storage/{{.host}}/{{.time.UTC.Format "2006-01-02T15:04:05Z07:00"}}'
+  path: 'storage/{{.host}}/{{.time.UTC.Format "2006-01-02T15:04:05Z07:00"}}'
 
 timeout: 30s # Optional timeout for a whole work cycle
 interval: 4h
 ```
 
 ## Exporter drivers
+
+### Common options
+
+| Name    | Type                | Default     | Required | Description |
+| ------- | ------------------- | ----------- | -------- | ----------- |
+| driver  | string              | ssh-command |          | Driver name |
+| timeout | string/duration[^1] |             |          |             |
 
 ### ssh-command
 
@@ -51,6 +46,13 @@ interval: 4h
 | command       | string  | export  |          | Command to run on a remote device |
 
 ## Storage drivers
+
+### Common options
+
+| Name    | Type                | Default | Required | Description |
+| ------- | ------------------- | ------- | -------- | ----------- |
+| driver  | string              |         | ✓        | Driver name |
+| timeout | string/duration[^1] |         |          |             |
 
 ### file
 
@@ -78,6 +80,8 @@ interval: 4h
 | email            | string          |         | ✓        | Author email                                                 |
 | commit_message   | string/template |         | ✓        | Commit message                                               |
 
+[^1]: https://golang.org/pkg/time/#ParseDuration
+
 #### Example
 
 ```yaml
@@ -85,34 +89,29 @@ version: 1
 
 devices:
   list:
-    - options:
-        host: 192.168.88.1
+    - host: 192.168.88.1
   common:
     driver: ssh-command
     timeout: 30s
-    options:
-      command: export
-      username: admin
-      identity_file: /path/to/routeros_admin_private_key
+    command: export
+    username: admin
+    identity_file: /Users/asphyx/.ssh/id_rsa
 
 storage:
   driver: git
   timeout: 30s
-  options:
-    url: git@github.com:yourorg/networkbackups.git
-    identity_file: /path/to/private_git_deploy_key
-    destination_path: '{{.host}}'
-    push: true
-    name: Network Backup
-    email: networkbackup@example.net
-    commit_message: '{{.time.UTC.Format "2006-01-02T15:04:05Z07:00"}}'
+  url: git@github.com:e-asphyx/mikrotik.git
+  identity_file: /Users/asphyx/.ssh/id_rsa
+  destination_path: '{{.host}}'
+  push: true
+  name: Eugene Zagidullin
+  email: e.asphyx@gmail.com
+  commit_message: '{{.time.UTC.Format "2006-01-02T15:04:05Z07:00"}}'
 
 timeout: 30s
 interval: 4h
 ```
 
-
-
 ## Template data fields (transaction metadata)
 
-Currently `ssh-command` driver exposes all its options (except password) as transaction metadata. Additionally `time` field is set to transaction timestamp (see the descroption of Go `time.Time` type).
+Currently `ssh-command` driver exposes all its options (except password) as a transaction metadata. Additionally `time` field is set to transaction timestamp (see the description of Go `time.Time` type).
