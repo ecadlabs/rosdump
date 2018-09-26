@@ -38,10 +38,10 @@ jobs:
     - setup_remote_docker
     - attach_workspace:
         at: .
-    - run: docker build -t ecadlabs/rosdump:$CIRCLE_BRANCH -t ecadlabs/rosdump:latest .
+    - run: docker build -t ecadlabs/rosdump:$CIRCLE_TAG -t ecadlabs/rosdump:latest .
     - run: docker images
     - run: docker login -u $DOCKER_USER -p $DOCKER_PASS
-    - run: docker push ecadlabs/rosdump:$CIRCLE_BRANCH
+    - run: docker push ecadlabs/rosdump:$CIRCLE_TAG
     - run: docker push ecadlabs/rosdump:latest
 
 
