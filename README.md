@@ -1,4 +1,17 @@
-# rosdump
+=======
+[![CircleCI](https://circleci.com/gh/ecadlabs/rosdump/tree/master.svg?style=svg)](https://circleci.com/gh/ecadlabs/rosdump/tree/master)
+
+# Rosdump (Beta)
+
+rosdump is a tool for backing up and tracking configuration of RouterOS
+devices.
+
+Use rosdump to:
+
+- Backup Mikrotik network device configurations to local files
+- Backup Mikrotik network device configurations and track changes over time
+    using git
+- Run as a daemon that backs up devices on a predefined schedule
 
 ## Config example
 
@@ -21,7 +34,7 @@ storage:
   path: 'storage/{{.host}}/{{.time.UTC.Format "2006-01-02T15:04:05Z07:00"}}'
 
 timeout: 30s # Optional timeout for a whole work cycle
-interval: 4h
+interval: 4h # Duration between backups when running as a daemon
 ```
 
 ## Exporter drivers
@@ -95,18 +108,18 @@ devices:
     timeout: 30s
     command: export
     username: admin
-    identity_file: /Users/asphyx/.ssh/id_rsa
+    identity_file: /etc/rosdump/routeros_admin_private_key
 
 storage:
   driver: git
   timeout: 30s
-  url: git@github.com:e-asphyx/mikrotik.git
-  identity_file: /Users/asphyx/.ssh/id_rsa
+  url: git@github.com:yourorg/networkbackups.git
+  identity_file: /etc/rosdump/git_deploy_key
   destination_path: '{{.host}}'
   push: true
-  name: Eugene Zagidullin
-  email: e.asphyx@gmail.com
-  commit_message: '{{.time.UTC.Format "2006-01-02T15:04:05Z07:00"}}'
+  name: Network Backup
+  email: networkbackup@example.net
+  commit_message: 'Rosdump backup {{.time.UTC.Format "2006-01-02T15:04:05Z07:00"}}'
 
 timeout: 30s
 interval: 4h
