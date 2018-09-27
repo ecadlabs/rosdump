@@ -3,6 +3,7 @@ package scraper
 import (
 	"context"
 	"errors"
+	"io"
 	"sync"
 	"time"
 
@@ -54,8 +55,7 @@ func (s *Scraper) export(ctx context.Context, dev *Exporter, tx storage.Tx, l *l
 	}
 
 	defer func() {
-		e := data.Close()
-		if err == nil {
+		if e := data.Close(); err == nil {
 			err = e
 		}
 	}()
@@ -64,11 +64,18 @@ func (s *Scraper) export(ctx context.Context, dev *Exporter, tx storage.Tx, l *l
 
 	metadata["time"] = tx.Timestamp()
 
-	if err := tx.Add(s.storageCtx(ctx), metadata, data); err != nil {
+	wr, err := tx.Add(s.storageCtx(ctx), metadata)
+	if err != nil {
 		return err
 	}
 
-	return nil
+	_, err = io.Copy(wr, data)
+
+	if e := wr.Close(); err == nil {
+		err = e
+	}
+
+	return err
 }
 
 func (s *Scraper) exportLoop(ctx context.Context, ch <-chan *Exporter, tx storage.Tx) {
@@ -130,7 +137,12 @@ jobLoop:
 
 	s.Logger.Infoln("committing...")
 
-	return tx.Commit(s.storageCtx(ctx))
+	if err := tx.Commit(s.storageCtx(ctx)); err != nil {
+		return err
+	}
+
+	s.Logger.Infoln("done")
+	return nil
 }
 
 func New(c *config.Config, logger *logrus.Logger) (*Scraper, error) {

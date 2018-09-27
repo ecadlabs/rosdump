@@ -270,10 +270,32 @@ func (g *GitStorage) Begin(ctx context.Context) (Tx, error) {
 	}, nil
 }
 
-func (g *gitStorageTx) Add(ctx context.Context, metadata map[string]interface{}, stream io.Reader) error {
+type gitWriter struct {
+	io.WriteCloser
+	path string
+	wt   *git.Worktree
+	g    *GitStorage
+}
+
+func (g *gitWriter) Close() error {
+	g.g.mtx.Lock()
+	defer g.g.mtx.Unlock()
+
+	if err := g.WriteCloser.Close(); err != nil {
+		return fmt.Errorf("git: %v", err)
+	}
+
+	if _, err := g.wt.Add(g.path); err != nil {
+		return fmt.Errorf("git: %v", err)
+	}
+
+	return nil
+}
+
+func (g *gitStorageTx) Add(ctx context.Context, metadata map[string]interface{}) (io.WriteCloser, error) {
 	var dest strings.Builder
 	if err := g.g.destTpl.Execute(&dest, metadata); err != nil {
-		return fmt.Errorf("git: %v", err)
+		return nil, fmt.Errorf("git: %v", err)
 	}
 
 	out := dest.String()
@@ -286,29 +308,22 @@ func (g *gitStorageTx) Add(ctx context.Context, metadata map[string]interface{},
 
 	dir := path.Dir(out)
 	if err := fs.MkdirAll(dir, 0777); err != nil {
-		return fmt.Errorf("git: %v", err)
+		return nil, fmt.Errorf("git: %v", err)
 	}
 
 	g.g.logger.WithField("file", out).Infoln("writing...")
 
 	fd, err := fs.Create(out)
 	if err != nil {
-		return fmt.Errorf("git: %v", err)
+		return nil, fmt.Errorf("git: %v", err)
 	}
 
-	if _, err := io.Copy(fd, stream); err != nil {
-		return fmt.Errorf("git: %v", err)
-	}
-
-	if err := fd.Close(); err != nil {
-		return fmt.Errorf("git: %v", err)
-	}
-
-	if _, err := g.wt.Add(out); err != nil {
-		return fmt.Errorf("git: %v", err)
-	}
-
-	return nil
+	return &gitWriter{
+		WriteCloser: fd,
+		path:        out,
+		wt:          g.wt,
+		g:           g.g,
+	}, nil
 }
 
 func (g *gitStorageTx) Timestamp() time.Time { return g.timestamp }
@@ -338,15 +353,13 @@ func (g *gitStorageTx) Commit(ctx context.Context) error {
 	}
 
 	g.g.logger.WithFields(logrus.Fields{
-		"hash": commit.String(),
-		"msg":  msg.String(),
+		"hash":    commit.String(),
+		"message": msg.String(),
 	}).Infoln("committing...")
 
 	if _, err := g.g.repo.CommitObject(commit); err != nil {
 		return fmt.Errorf("git: %v", err)
 	}
-
-	//g.g.logger.Infoln(obj)
 
 	if g.g.conf.Push {
 		g.g.logger.Infoln("pushing...")

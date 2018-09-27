@@ -11,7 +11,7 @@ import (
 )
 
 type Tx interface {
-	Add(ctx context.Context, metadata map[string]interface{}, stream io.Reader) error
+	Add(ctx context.Context, metadata map[string]interface{}) (io.WriteCloser, error)
 	Timestamp() time.Time
 	Commit(ctx context.Context) error
 }
