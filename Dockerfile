@@ -7,6 +7,6 @@ RUN go build
 # final stage
 FROM alpine
 WORKDIR /app
-COPY --from=build-env /go/src/github.com/ecadlabs/rosdump /usr/bin/rosdump
-ENTRYPOINT ["/app/customerd"]
+COPY --from=build-env /go/src/github.com/ecadlabs/rosdump/rosdump /usr/bin/rosdump
+ENTRYPOINT ["/usr/bin/rosdump"]
 CMD ["-c", "/etc/rosdump.yaml"]
