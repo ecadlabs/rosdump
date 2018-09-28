@@ -3,12 +3,14 @@ package scraper
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"sync"
 	"time"
 
 	"github.com/ecadlabs/rosdump/config"
 	"github.com/ecadlabs/rosdump/devices"
+	"github.com/ecadlabs/rosdump/filter"
 	"github.com/ecadlabs/rosdump/storage"
 	"github.com/sirupsen/logrus"
 )
@@ -19,6 +21,7 @@ const (
 
 type Exporter struct {
 	Device  devices.Exporter
+	Filters []filter.Filter
 	Timeout time.Duration
 }
 
@@ -69,7 +72,20 @@ func (s *Scraper) export(ctx context.Context, dev *Exporter, tx storage.Tx, l *l
 		return err
 	}
 
-	_, err = io.Copy(wr, data)
+	var src io.Reader = data
+
+	// Build filter chain
+	for _, f := range dev.Filters {
+		r, w := io.Pipe()
+
+		if err := f.Start(w, src); err != nil {
+			return err
+		}
+
+		src = r
+	}
+
+	_, err = io.Copy(wr, src)
 
 	if e := wr.Close(); err == nil {
 		err = e
@@ -146,6 +162,21 @@ jobLoop:
 }
 
 func New(c *config.Config, logger *logrus.Logger) (*Scraper, error) {
+	// Init filters
+	declaredFilters := make(map[string]filter.Filter, len(c.Filters))
+	for _, f := range c.Filters {
+		if f.Name == "" {
+			continue
+		}
+
+		filter, err := filter.NewFilter(f.Filter, f.Options, logger)
+		if err != nil {
+			return nil, err
+		}
+
+		declaredFilters[f.Name] = filter
+	}
+
 	// Init drivers
 	var devCommon config.Options
 
@@ -184,9 +215,39 @@ func New(c *config.Config, logger *logrus.Logger) (*Scraper, error) {
 			timeout, _ = time.ParseDuration(t)
 		}
 
+		// Optional filters
+		var filters []filter.Filter
+		if val, ok := options["filters"]; ok {
+			var names []string
+
+			switch v := val.(type) {
+			case string:
+				names = []string{v}
+			case []interface{}:
+				names = make([]string, 0, len(v))
+				for _, vv := range v {
+					if s, ok := vv.(string); ok {
+						names = append(names, s)
+					}
+				}
+			}
+
+			filters = make([]filter.Filter, len(names))
+
+			for i, name := range names {
+				f, ok := declaredFilters[name]
+				if !ok {
+					return nil, fmt.Errorf("Filter `%s' is not declared", name)
+				}
+
+				filters[i] = f
+			}
+		}
+
 		e := Exporter{
 			Device:  drv,
 			Timeout: timeout,
+			Filters: filters,
 		}
 
 		exporters = append(exporters, &e)
