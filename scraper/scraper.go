@@ -232,15 +232,17 @@ func New(c *config.Config, logger *logrus.Logger) (*Scraper, error) {
 				}
 			}
 
-			filters = make([]filter.Filter, len(names))
+			if len(names) != 0 {
+				filters = make([]filter.Filter, len(names))
 
-			for i, name := range names {
-				f, ok := declaredFilters[name]
-				if !ok {
-					return nil, fmt.Errorf("Filter `%s' is not declared", name)
+				for i, name := range names {
+					f, ok := declaredFilters[name]
+					if !ok {
+						return nil, fmt.Errorf("Filter `%s' is not declared", name)
+					}
+
+					filters[i] = f
 				}
-
-				filters[i] = f
 			}
 		}
 
