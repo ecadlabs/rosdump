@@ -47,10 +47,11 @@ func (r *Regexp) Start(dst io.WriteCloser, src io.Reader) error {
 
 func newRegexpFilter(options config.Options, logger *logrus.Logger) (Filter, error) {
 	expr, _ := options.GetString("expr")
-	var (
-		re  Regexp
-		err error
-	)
+	var err error
+
+	re := Regexp{
+		Logger: logger,
+	}
 
 	re.Regexp, err = regexp.Compile(expr)
 	if err != nil {
