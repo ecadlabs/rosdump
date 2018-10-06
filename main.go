@@ -26,12 +26,12 @@ func runScraper(ctx context.Context, s *scraper.Scraper, timeout time.Duration) 
 func main() {
 	var (
 		configFile string
-		once       bool
+		daemon     bool
 		nowait     bool
 	)
 
 	flag.StringVar(&configFile, "c", "", "Config")
-	flag.BoolVar(&once, "once", false, "Run once and exit")
+	flag.BoolVar(&daemon, "d", false, "Run in daemon mode")
 	flag.BoolVar(&nowait, "n", false, "Don't wait before first run")
 	flag.Parse()
 
@@ -53,7 +53,7 @@ func main() {
 	timeout, _ := time.ParseDuration(cfg.Timeout)
 	interval, _ := time.ParseDuration(cfg.Interval)
 
-	if !once && interval == 0 {
+	if daemon && interval == 0 {
 		log.Fatal("Interval must not be zero")
 	}
 
@@ -63,16 +63,16 @@ func main() {
 	go func() {
 		defer close(sem)
 
-		if once || nowait {
+		if !daemon || nowait {
 			if err := runScraper(ctx, sc, timeout); err != nil {
-				if once {
+				if !daemon {
 					log.Fatal(err)
 				} else {
 					log.Error(err)
 				}
 			}
 
-			if once {
+			if !daemon {
 				os.Exit(0)
 			}
 		}
