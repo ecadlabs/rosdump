@@ -123,7 +123,7 @@ func (s *SSHCommand) Export(ctx context.Context) (response io.ReadCloser, metada
 
 	client, err := sshutils.Dial(ctx, address, &sshConfig)
 	if err != nil {
-		return nil, nil, fmt.Errorf("ssh-command: %v", err)
+		return nil, s.ExportMetadata, fmt.Errorf("ssh-command: %v", err)
 	}
 
 	defer func() {
@@ -158,18 +158,18 @@ func (s *SSHCommand) Export(ctx context.Context) (response io.ReadCloser, metada
 
 	session, err := client.NewSession()
 	if err != nil {
-		return nil, nil, fmt.Errorf("ssh-command: new session: %v", err)
+		return nil, s.ExportMetadata, fmt.Errorf("ssh-command: new session: %v", err)
 	}
 
 	stdout, err := session.StdoutPipe()
 	if err != nil {
-		return nil, nil, err
+		return nil, s.ExportMetadata, err
 	}
 
 	l.Infof("issuing `%s' command...", command)
 
 	if err = session.Start(command); err != nil {
-		return nil, nil, fmt.Errorf("ssh-command: session start: %v", err)
+		return nil, s.ExportMetadata, fmt.Errorf("ssh-command: session start: %v", err)
 	}
 
 	rn := readNotifier{

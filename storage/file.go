@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/ecadlabs/rosdump/config"
+	"github.com/ecadlabs/rosdump/devices"
 	"github.com/sirupsen/logrus"
 )
 
@@ -49,7 +50,11 @@ func (f *fileWriter) Close() error {
 	return f.fd.Close()
 }
 
-func (f *fileStorageTx) Add(ctx context.Context, metadata map[string]interface{}) (io.WriteCloser, error) {
+func (f *fileWriter) CloseWithError(err error) error {
+	return f.Close()
+}
+
+func (f *fileStorageTx) Add(ctx context.Context, metadata devices.Metadata) (WriteCloserWithError, error) {
 	var outPath strings.Builder
 	if err := f.f.pathTpl.Execute(&outPath, metadata); err != nil {
 		return nil, err

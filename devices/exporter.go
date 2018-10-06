@@ -11,6 +11,20 @@ import (
 
 type Metadata map[string]interface{}
 
+func (m Metadata) Append(add Metadata) Metadata {
+	out := make(Metadata, len(m)+len(add))
+
+	for k, v := range m {
+		out[k] = v
+	}
+
+	for k, v := range add {
+		out[k] = v
+	}
+
+	return out
+}
+
 type Exporter interface {
 	Export(context.Context) (io.ReadCloser, Metadata, error)
 	Metadata() Metadata // For logging purposes

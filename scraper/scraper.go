@@ -53,28 +53,39 @@ func (s *Scraper) export(ctx context.Context, dev *Exporter, tx storage.Tx, l *l
 	l.Infoln("exporting...")
 
 	data, metadata, err := dev.Device.Export(exportCtx)
-	if err != nil {
-		return err
+	if metadata == nil {
+		metadata = make(devices.Metadata, 1)
 	}
+	metadata["time"] = tx.Timestamp()
 
-	defer func() {
-		if e := data.Close(); err == nil {
-			err = e
-		}
-	}()
+	if err == nil {
+		defer func() {
+			if e := data.Close(); err == nil {
+				err = e
+			}
+		}()
+	}
 
 	l.Infoln("adding stream to transaction...")
 
-	metadata["time"] = tx.Timestamp()
+	wr, e := tx.Add(s.storageCtx(ctx), metadata)
+	if e != nil {
+		if err == nil {
+			return e
+		}
 
-	wr, err := tx.Add(s.storageCtx(ctx), metadata)
-	if err != nil {
+		l.Errorln(e)
 		return err
 	}
 
-	var src io.Reader = data
+	if err != nil {
+		wr.CloseWithError(err)
+		return err
+	}
 
 	// Build filter chain
+
+	var src io.Reader = data
 	for _, f := range dev.Filters {
 		r, w := io.Pipe()
 
@@ -87,8 +98,10 @@ func (s *Scraper) export(ctx context.Context, dev *Exporter, tx storage.Tx, l *l
 
 	_, err = io.Copy(wr, src)
 
-	if e := wr.Close(); err == nil {
-		err = e
+	if e := wr.CloseWithError(err); e != nil {
+		if err == nil {
+			return e
+		}
 	}
 
 	return err

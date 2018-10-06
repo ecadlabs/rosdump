@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/ecadlabs/rosdump/config"
+	"github.com/ecadlabs/rosdump/devices"
 	"github.com/ecadlabs/rosdump/sshutils"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/crypto/ssh"
@@ -48,6 +49,8 @@ type GitStorageConfig struct {
 	// Target path template relative to work tree
 	DestinationPath string
 
+	Summary string
+
 	// Author name
 	Name string
 	// Author email
@@ -58,12 +61,13 @@ type GitStorageConfig struct {
 }
 
 type GitStorage struct {
-	repo    *git.Repository
-	conf    *GitStorageConfig
-	destTpl *template.Template
-	msgTpl  *template.Template
-	mtx     sync.Mutex
-	logger  *logrus.Logger
+	repo       *git.Repository
+	conf       *GitStorageConfig
+	destTpl    *template.Template
+	msgTpl     *template.Template
+	summaryTpl *template.Template
+	mtx        sync.Mutex
+	logger     *logrus.Logger
 }
 
 var errCloneURL = errors.New("git: clone URL must be specified")
@@ -217,6 +221,26 @@ func initMem(ctx context.Context, conf *GitStorageConfig, logger *logrus.Logger)
 }
 
 func NewGitStorage(ctx context.Context, conf *GitStorageConfig, logger *logrus.Logger) (*GitStorage, error) {
+	if conf.RepositoryPath == "" && conf.URL == "" {
+		return nil, errors.New("git: Either repository path or URL must be specified")
+	}
+
+	if conf.DestinationPath == "" {
+		return nil, errors.New("git: Missing destination path")
+	}
+
+	if conf.Name == "" {
+		return nil, errors.New("git: Missing commit author name")
+	}
+
+	if conf.Email == "" {
+		return nil, errors.New("git: Missing commit email")
+	}
+
+	if conf.CommitMessage == "" {
+		return nil, errors.New("git: Missing commit message")
+	}
+
 	var (
 		repo *git.Repository
 		err  error
@@ -242,12 +266,21 @@ func NewGitStorage(ctx context.Context, conf *GitStorageConfig, logger *logrus.L
 		return nil, fmt.Errorf("git: %v", err)
 	}
 
+	var summaryTpl *template.Template
+	if conf.Summary != "" {
+		summaryTpl, err = template.New("summary").Parse(conf.Summary)
+		if err != nil {
+			return nil, fmt.Errorf("git: %v", err)
+		}
+	}
+
 	return &GitStorage{
-		repo:    repo,
-		conf:    conf,
-		destTpl: destTpl,
-		msgTpl:  msgTpl,
-		logger:  logger,
+		repo:       repo,
+		conf:       conf,
+		destTpl:    destTpl,
+		msgTpl:     msgTpl,
+		summaryTpl: summaryTpl,
+		logger:     logger,
 	}, nil
 }
 
@@ -255,6 +288,7 @@ type gitStorageTx struct {
 	wt        *git.Worktree
 	g         *GitStorage
 	timestamp time.Time
+	log       []string
 }
 
 func (g *GitStorage) Begin(ctx context.Context) (Tx, error) {
@@ -272,27 +306,49 @@ func (g *GitStorage) Begin(ctx context.Context) (Tx, error) {
 
 type gitWriter struct {
 	io.WriteCloser
-	path string
-	wt   *git.Worktree
-	g    *GitStorage
+	path     string
+	metadata devices.Metadata
+	tx       *gitStorageTx
 }
 
 func (g *gitWriter) Close() error {
-	g.g.mtx.Lock()
-	defer g.g.mtx.Unlock()
+	return g.CloseWithError(nil)
+}
+
+func (g *gitWriter) CloseWithError(e error) error {
+	g.tx.g.mtx.Lock()
+	defer g.tx.g.mtx.Unlock()
 
 	if err := g.WriteCloser.Close(); err != nil {
 		return fmt.Errorf("git: %v", err)
 	}
 
-	if _, err := g.wt.Add(g.path); err != nil {
+	if e == nil {
+		if _, err := g.tx.wt.Add(g.path); err != nil {
+			return fmt.Errorf("git: %v", err)
+		}
+	}
+
+	if g.tx.g.summaryTpl == nil {
+		return nil
+	}
+
+	// Add log entry
+	data := g.metadata.Append(devices.Metadata{
+		"error": e,
+	})
+
+	var summary strings.Builder
+	if err := g.tx.g.summaryTpl.Execute(&summary, data); err != nil {
 		return fmt.Errorf("git: %v", err)
 	}
+
+	g.tx.log = append(g.tx.log, summary.String())
 
 	return nil
 }
 
-func (g *gitStorageTx) Add(ctx context.Context, metadata map[string]interface{}) (io.WriteCloser, error) {
+func (g *gitStorageTx) Add(ctx context.Context, metadata devices.Metadata) (WriteCloserWithError, error) {
 	var dest strings.Builder
 	if err := g.g.destTpl.Execute(&dest, metadata); err != nil {
 		return nil, fmt.Errorf("git: %v", err)
@@ -321,16 +377,17 @@ func (g *gitStorageTx) Add(ctx context.Context, metadata map[string]interface{})
 	return &gitWriter{
 		WriteCloser: fd,
 		path:        out,
-		wt:          g.wt,
-		g:           g.g,
+		tx:          g,
+		metadata:    metadata,
 	}, nil
 }
 
 func (g *gitStorageTx) Timestamp() time.Time { return g.timestamp }
 
 func (g *gitStorageTx) Commit(ctx context.Context) error {
-	tdata := map[string]interface{}{
-		"time": g.timestamp,
+	tdata := devices.Metadata{
+		"time":    g.timestamp,
+		"summary": g.log,
 	}
 
 	var msg strings.Builder
@@ -356,6 +413,8 @@ func (g *gitStorageTx) Commit(ctx context.Context) error {
 		"hash":    commit.String(),
 		"message": msg.String(),
 	}).Infoln("committing...")
+
+	g.g.logger.Infoln(g.log)
 
 	if _, err := g.g.repo.CommitObject(commit); err != nil {
 		return fmt.Errorf("git: %v", err)
@@ -429,6 +488,7 @@ func newGitStorage(ctx context.Context, options config.Options, logger *logrus.L
 		fmt.Println(conf.RefSpecs)
 	}
 
+	conf.Summary, _ = options.GetString("summary")
 	conf.DestinationPath, _ = options.GetString("destination_path")
 	conf.Name, _ = options.GetString("name")
 	conf.Email, _ = options.GetString("email")

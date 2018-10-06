@@ -24,10 +24,17 @@ storage:
   url: git@github.com:e-asphyx/mikrotik.git
   identity_file: /Users/asphyx/.ssh/id_rsa
   destination_path: '{{.host}}'
+  summary: '{{.host}}: {{with .error}}{{.}}{{else}}ok{{end}}'
   push: true
   name: Eugene Zagidullin
   email: e.asphyx@gmail.com
-  commit_message: '{{.time.UTC.Format "2006-01-02T15:04:05Z07:00"}}'
+  commit_message: |
+    Backup time: {{.time.UTC.Format "2006-01-02T15:04:05Z07:00"}}
+
+    Summary:
+    {{range .summary -}}
+    {{.}}
+    {{end -}}
 
 timeout: 30s
 interval: 4h
