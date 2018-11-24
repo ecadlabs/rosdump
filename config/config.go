@@ -18,12 +18,19 @@ type Devices struct {
 }
 
 type Config struct {
-	Version       string  `yaml:"version"`
-	Timeout       string  `yaml:"timeout"`
-	MaxGoroutines int     `yaml:"max_goroutines"`
-	Interval      string  `yaml:"interval"`
-	Devices       Devices `yaml:"devices"`
-	Storage       Options `yaml:"storage"`
+	Version       string    `yaml:"version"`
+	Timeout       string    `yaml:"timeout"`
+	MaxGoroutines int       `yaml:"max_goroutines"`
+	Interval      string    `yaml:"interval"`
+	Devices       Devices   `yaml:"devices"`
+	Storage       Options   `yaml:"storage"`
+	Filters       []*Filter `yaml:"filters"`
+}
+
+type Filter struct {
+	Filter  string  `yaml:"filter"`
+	Name    string  `yaml:"name"`
+	Options Options `yaml:"options"`
 }
 
 type Options map[string]interface{}

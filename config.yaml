@@ -1,5 +1,12 @@
 version: 1
 
+filters:
+  - name: mask_timestamp
+    filter: regexp
+    options:
+      expr: '^#\s*\w+/\d+/\d+ \d+:\d+:\d+'
+      replace: '# TIMESTAMP_MASKED'
+
 devices:
   list:
     - host: 192.168.88.1
@@ -9,6 +16,7 @@ devices:
     command: export
     username: admin
     password: password
+    filters: [mask_timestamp]
 
 storage:
   driver: file

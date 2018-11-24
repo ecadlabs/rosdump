@@ -1,5 +1,12 @@
 version: 1
 
+filters:
+  - name: mask_timestamp
+    filter: regexp
+    options:
+      expr: '^#\s*\w+/\d+/\d+ \d+:\d+:\d+'
+      replace: '# TIMESTAMP_MASKED'
+
 devices:
   list:
     - host: 192.168.88.1
@@ -9,6 +16,7 @@ devices:
     command: export
     username: admin
     identity_file: /Users/asphyx/.ssh/id_rsa
+    filters: [mask_timestamp]
 
 storage:
   driver: git
@@ -16,10 +24,17 @@ storage:
   url: git@github.com:e-asphyx/mikrotik.git
   identity_file: /Users/asphyx/.ssh/id_rsa
   destination_path: '{{.host}}'
+  summary: '{{.host}}: {{with .error}}{{.}}{{else}}ok{{end}}'
   push: true
   name: Eugene Zagidullin
   email: e.asphyx@gmail.com
-  commit_message: '{{.time.UTC.Format "2006-01-02T15:04:05Z07:00"}}'
+  commit_message: |
+    Backup time: {{.time.UTC.Format "2006-01-02T15:04:05Z07:00"}}
+
+    Summary:
+    {{range .summary -}}
+    {{.}}
+    {{end -}}
 
 timeout: 30s
 interval: 4h

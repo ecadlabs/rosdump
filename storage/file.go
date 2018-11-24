@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/ecadlabs/rosdump/config"
+	"github.com/ecadlabs/rosdump/devices"
 	"github.com/sirupsen/logrus"
 )
 
@@ -33,15 +34,35 @@ func (f *FileStorage) Begin(ctx context.Context) (Tx, error) {
 	}, nil
 }
 
-func (f *fileStorageTx) Add(ctx context.Context, metadata map[string]interface{}, stream io.Reader) (err error) {
+type fileWriter struct {
+	io.Writer
+	fd  *os.File
+	zfd *gzip.Writer
+}
+
+func (f *fileWriter) Close() error {
+	if f.zfd != nil {
+		if err := f.zfd.Close(); err != nil {
+			return err
+		}
+	}
+
+	return f.fd.Close()
+}
+
+func (f *fileWriter) CloseWithError(err error) error {
+	return f.Close()
+}
+
+func (f *fileStorageTx) Add(ctx context.Context, metadata devices.Metadata) (WriteCloserWithError, error) {
 	var outPath strings.Builder
-	if err = f.f.pathTpl.Execute(&outPath, metadata); err != nil {
-		return err
+	if err := f.f.pathTpl.Execute(&outPath, metadata); err != nil {
+		return nil, err
 	}
 
 	dir := path.Dir(outPath.String())
-	if err = os.MkdirAll(dir, 0777); err != nil {
-		return err
+	if err := os.MkdirAll(dir, 0777); err != nil {
+		return nil, err
 	}
 
 	f.f.logger.WithFields(logrus.Fields{
@@ -51,34 +72,22 @@ func (f *fileStorageTx) Add(ctx context.Context, metadata map[string]interface{}
 
 	fd, err := os.Create(outPath.String())
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	defer func() {
-		e := fd.Close()
-		if err == nil {
-			err = e
-		}
-	}()
-
-	var outFd io.Writer
+	res := fileWriter{
+		Writer: fd,
+		fd:     fd,
+	}
 
 	if f.f.compress {
 		zfd := gzip.NewWriter(fd)
-		defer func() {
-			e := zfd.Close()
-			if err == nil {
-				err = e
-			}
-		}()
 
-		outFd = zfd
-	} else {
-		outFd = fd
+		res.Writer = zfd
+		res.zfd = zfd
 	}
 
-	_, err = io.Copy(outFd, stream)
-	return err
+	return &res, err
 }
 
 func (f *fileStorageTx) Timestamp() time.Time { return f.timestamp }

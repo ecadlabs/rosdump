@@ -3,11 +3,14 @@ package scraper
 import (
 	"context"
 	"errors"
+	"fmt"
+	"io"
 	"sync"
 	"time"
 
 	"github.com/ecadlabs/rosdump/config"
 	"github.com/ecadlabs/rosdump/devices"
+	"github.com/ecadlabs/rosdump/filter"
 	"github.com/ecadlabs/rosdump/storage"
 	"github.com/sirupsen/logrus"
 )
@@ -18,6 +21,7 @@ const (
 
 type Exporter struct {
 	Device  devices.Exporter
+	Filters []filter.Filter
 	Timeout time.Duration
 }
 
@@ -49,26 +53,58 @@ func (s *Scraper) export(ctx context.Context, dev *Exporter, tx storage.Tx, l *l
 	l.Infoln("exporting...")
 
 	data, metadata, err := dev.Device.Export(exportCtx)
-	if err != nil {
-		return err
+	if metadata == nil {
+		metadata = make(devices.Metadata, 1)
 	}
+	metadata["time"] = tx.Timestamp()
 
-	defer func() {
-		e := data.Close()
-		if err == nil {
-			err = e
-		}
-	}()
+	if err == nil {
+		defer func() {
+			if e := data.Close(); err == nil {
+				err = e
+			}
+		}()
+	}
 
 	l.Infoln("adding stream to transaction...")
 
-	metadata["time"] = tx.Timestamp()
+	wr, e := tx.Add(s.storageCtx(ctx), metadata)
+	if e != nil {
+		if err == nil {
+			return e
+		}
 
-	if err := tx.Add(s.storageCtx(ctx), metadata, data); err != nil {
+		l.Errorln(e)
 		return err
 	}
 
-	return nil
+	if err != nil {
+		wr.CloseWithError(err)
+		return err
+	}
+
+	// Build filter chain
+
+	var src io.Reader = data
+	for _, f := range dev.Filters {
+		r, w := io.Pipe()
+
+		if err := f.Start(w, src); err != nil {
+			return err
+		}
+
+		src = r
+	}
+
+	_, err = io.Copy(wr, src)
+
+	if e := wr.CloseWithError(err); e != nil {
+		if err == nil {
+			return e
+		}
+	}
+
+	return err
 }
 
 func (s *Scraper) exportLoop(ctx context.Context, ch <-chan *Exporter, tx storage.Tx) {
@@ -130,10 +166,30 @@ jobLoop:
 
 	s.Logger.Infoln("committing...")
 
-	return tx.Commit(s.storageCtx(ctx))
+	if err := tx.Commit(s.storageCtx(ctx)); err != nil {
+		return err
+	}
+
+	s.Logger.Infoln("done")
+	return nil
 }
 
 func New(c *config.Config, logger *logrus.Logger) (*Scraper, error) {
+	// Init filters
+	declaredFilters := make(map[string]filter.Filter, len(c.Filters))
+	for _, f := range c.Filters {
+		if f.Name == "" {
+			continue
+		}
+
+		filter, err := filter.NewFilter(f.Filter, f.Options, logger)
+		if err != nil {
+			return nil, err
+		}
+
+		declaredFilters[f.Name] = filter
+	}
+
 	// Init drivers
 	var devCommon config.Options
 
@@ -172,9 +228,41 @@ func New(c *config.Config, logger *logrus.Logger) (*Scraper, error) {
 			timeout, _ = time.ParseDuration(t)
 		}
 
+		// Optional filters
+		var filters []filter.Filter
+		if val, ok := options["filters"]; ok {
+			var names []string
+
+			switch v := val.(type) {
+			case string:
+				names = []string{v}
+			case []interface{}:
+				names = make([]string, 0, len(v))
+				for _, vv := range v {
+					if s, ok := vv.(string); ok {
+						names = append(names, s)
+					}
+				}
+			}
+
+			if len(names) != 0 {
+				filters = make([]filter.Filter, len(names))
+
+				for i, name := range names {
+					f, ok := declaredFilters[name]
+					if !ok {
+						return nil, fmt.Errorf("Filter `%s' is not declared", name)
+					}
+
+					filters[i] = f
+				}
+			}
+		}
+
 		e := Exporter{
 			Device:  drv,
 			Timeout: timeout,
+			Filters: filters,
 		}
 
 		exporters = append(exporters, &e)

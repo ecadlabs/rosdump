@@ -7,11 +7,17 @@ import (
 	"time"
 
 	"github.com/ecadlabs/rosdump/config"
+	"github.com/ecadlabs/rosdump/devices"
 	"github.com/sirupsen/logrus"
 )
 
+type WriteCloserWithError interface {
+	io.WriteCloser
+	CloseWithError(err error) error
+}
+
 type Tx interface {
-	Add(ctx context.Context, metadata map[string]interface{}, stream io.Reader) error
+	Add(ctx context.Context, metadata devices.Metadata) (WriteCloserWithError, error)
 	Timestamp() time.Time
 	Commit(ctx context.Context) error
 }
