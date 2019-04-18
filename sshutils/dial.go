@@ -72,6 +72,7 @@ func Dial(ctx context.Context, address string, c *Config) (client *Client, err e
 		Auth:            auth,
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 	}
+	config.Config.Ciphers = append(config.Config.Ciphers, "aes128-cbc")
 
 	var (
 		sshConn ssh.Conn
