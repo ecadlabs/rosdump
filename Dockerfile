@@ -9,4 +9,4 @@ FROM alpine
 WORKDIR /app
 COPY --from=build-env /go/src/github.com/ecadlabs/rosdump/rosdump /usr/bin/rosdump
 ENTRYPOINT ["/usr/bin/rosdump"]
-CMD ["-c", "/etc/rosdump.yml", "-once"]
+CMD ["-c", "/etc/rosdump.yml"]
